@@ -1,6 +1,6 @@
 本プログラムはChatGPT o4-miniを用いて開発されています
 
-# Graph Digitizer
+# Graph Digitizer (Linear)
 
 これは、グラフの画像ファイルからデータポイントを数値化するためのグラフィカルツールです。
 
