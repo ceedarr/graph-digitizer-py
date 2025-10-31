@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-graph_digitizer.py
+graph_digitizer.py バージョン名: "v6_csvname"
 依存: numpy, pillow (pip install numpy pillow)
 使い方:
     python graph_digitizer.py                 # ダイアログで画像選択
