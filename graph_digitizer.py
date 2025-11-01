@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-graph_digitizer.py バージョン名: "v11_probability_scale"
+graph_digitizer.py バージョン名: "v12_calib_to_top"
 依存: numpy, pillow (pip install numpy pillow)
 使い方:
     python graph_digitizer.py                 # ダイアログで画像選択
@@ -19,6 +19,7 @@ from statistics import NormalDist
 OUT_DIR = Path("./graph_value_output")
 LOG_DIR = Path("./log")
 LOG_FILE_PATH: Optional[Path] = None
+IS_WINDOWS = sys.platform.startswith("win")
 
 
 def _configure_logging() -> logging.Logger:
@@ -230,16 +231,15 @@ class GraphDigitizer(tk.Tk):
         LOGGER.info("データ取得: x=%.6g, y=%.6g", x, y)
 
     def _ask_true_coords(self, xi, yi):
-        prompt = f"クリック位置 (画像座標: {xi:.2f}, {yi:.2f}) の実際の座標を入力"
-        xt = simpledialog.askfloat("キャリブレーション", prompt + "\nx 値:")
-        yt = simpledialog.askfloat("キャリブレーション", prompt + "\ny 値:")
-        if xt is None or yt is None:  # キャンセル
+        result = self._prompt_calibration_values(xi, yi)
+        if result is None:
             return
+        xt, yt = result
         try:
             self._validate_calibration_value("x", xt)
             self._validate_calibration_value("y", yt)
         except ValueError as exc:
-            messagebox.showerror("エラー", str(exc))
+            messagebox.showerror("エラー", str(exc), parent=self)
             return
         LOGGER.info(
             "キャリブレーション入力: img=(%.2f, %.2f) -> actual=(%.6g, %.6g)",
@@ -249,9 +249,47 @@ class GraphDigitizer(tk.Tk):
             yt,
         )
         self.calib_pairs.append(((xi,yi), (xt,yt)))
-        if messagebox.askyesno("続けますか？","キャリブレーションを続けますか？\nいいえ＝終了"):
+        if messagebox.askyesno("続けますか？","キャリブレーションを続けますか？\nいいえ＝終了", parent=self):
             return
         self._solve_transform()
+
+    def _prompt_calibration_values(self, xi, yi):
+        prompt = f"クリック位置 (画像座標: {xi:.2f}, {yi:.2f}) の実際の座標を入力"
+
+        class _CoordinateDialog(simpledialog.Dialog):
+            def __init__(self, parent, message):
+                self._message = message
+                self._x_var = tk.StringVar()
+                self._y_var = tk.StringVar()
+                self.result = None
+                super().__init__(parent, title="キャリブレーション")
+
+            def body(self, master):
+                if IS_WINDOWS:
+                    self.after(0, lambda: self.wm_attributes("-topmost", True))
+                ttk.Label(master, text=self._message, justify="left").grid(row=0, column=0, columnspan=2, padx=12, pady=(12, 6), sticky="w")
+                ttk.Label(master, text="x 値:").grid(row=1, column=0, padx=(12, 6), pady=3, sticky="e")
+                entry_x = ttk.Entry(master, textvariable=self._x_var, width=16)
+                entry_x.grid(row=1, column=1, padx=(0, 12), pady=3, sticky="w")
+                ttk.Label(master, text="y 値:").grid(row=2, column=0, padx=(12, 6), pady=(0, 12), sticky="e")
+                entry_y = ttk.Entry(master, textvariable=self._y_var, width=16)
+                entry_y.grid(row=2, column=1, padx=(0, 12), pady=(0, 12), sticky="w")
+                return entry_x
+
+            def validate(self):
+                try:
+                    self._x_value = float(self._x_var.get())
+                    self._y_value = float(self._y_var.get())
+                except ValueError:
+                    messagebox.showerror("エラー", "数値を入力してください。", parent=self)
+                    return False
+                return True
+
+            def apply(self):
+                self.result = (self._x_value, self._y_value)
+
+        dialog = _CoordinateDialog(self, prompt)
+        return dialog.result
 
     # ---------- 線形変換推定 ----------
     def _solve_transform(self):
