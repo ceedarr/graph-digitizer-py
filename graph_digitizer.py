@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-graph_digitizer.py バージョン名: "v10_logging"
+graph_digitizer.py バージョン名: "v11_probability_scale"
 依存: numpy, pillow (pip install numpy pillow)
 使い方:
     python graph_digitizer.py                 # ダイアログで画像選択
@@ -14,6 +14,7 @@ import csv, logging, sys, tkinter as tk
 from tkinter import filedialog, simpledialog, messagebox, ttk
 import numpy as np
 from PIL import Image, ImageTk
+from statistics import NormalDist
 
 OUT_DIR = Path("./graph_value_output")
 LOG_DIR = Path("./log")
@@ -49,6 +50,7 @@ def _configure_logging() -> logging.Logger:
 
 
 LOGGER = _configure_logging()
+NORMAL_DIST = NormalDist()
 
 class GraphDigitizer(tk.Tk):
     def __init__(self, img_path=None):
@@ -66,8 +68,12 @@ class GraphDigitizer(tk.Tk):
         self.x_scale_mode = None
         self.y_scale_mode = None
         self.image_path = None
+        self._probability_is_percent = {"x": False, "y": False}
         LOGGER.info("GraphDigitizerを起動しました")
         if not self._select_scale_mode():
+            self.after(0, self.destroy)
+            return
+        if not self._configure_probability_units():
             self.after(0, self.destroy)
             return
         self._build_ui()
@@ -98,22 +104,25 @@ class GraphDigitizer(tk.Tk):
 
     # ---------- 軸スケール選択 ----------
     def _select_scale_mode(self):
-        scale_options = {
-            "線形-線形": ("linear", "linear"),
-            "線形-log": ("linear", "log"),
-            "log-線形": ("log", "linear"),
-            "log-log": ("log", "log"),
-        }
+        axis_modes = [("線形", "linear"), ("log", "log"), ("確率紙", "probability")]
+        scale_options = {}
+        labels = []
+        for x_label, x_mode in axis_modes:
+            for y_label, y_mode in axis_modes:
+                label = f"{x_label}-{y_label}"
+                scale_options[label] = (x_mode, y_mode)
+                labels.append(label)
+
         class _ScaleDialog(simpledialog.Dialog):
             def __init__(self, parent):
-                self._selection = tk.StringVar(value=list(scale_options.keys())[0])
+                self._selection = tk.StringVar(value=labels[0])
                 self.result = None
                 super().__init__(parent, title="軸スケール選択")
 
             def body(self, master):
                 ttk.Label(master, text="x軸-y軸のスケールを選択してください").grid(row=0, column=0, columnspan=2, padx=12, pady=(12, 6))
                 combo = ttk.Combobox(master, textvariable=self._selection,
-                                      values=list(scale_options.keys()), state="readonly", width=12)
+                                      values=labels, state="readonly", width=12)
                 combo.grid(row=1, column=0, columnspan=2, padx=12, pady=(0, 12))
                 combo.current(0)
                 return combo
@@ -135,6 +144,54 @@ class GraphDigitizer(tk.Tk):
         self.x_scale_mode, self.y_scale_mode = scale_options[dialog.result]
         LOGGER.info("スケールモードを設定しました: x=%s, y=%s", self.x_scale_mode, self.y_scale_mode)
         return True
+
+    def _configure_probability_units(self):
+        for axis, mode in (("x", self.x_scale_mode), ("y", self.y_scale_mode)):
+            if mode != "probability":
+                continue
+
+            unit = self._ask_probability_unit(axis)
+            if unit is None:
+                return False
+            self._probability_is_percent[axis] = (unit == "percent")
+        return True
+
+    def _ask_probability_unit(self, axis):
+        axis_label = "x軸" if axis == "x" else "y軸"
+        options = {
+            "0-1 (小数)": "fraction",
+            "0-100 (百分率)": "percent",
+        }
+
+        class _UnitDialog(simpledialog.Dialog):
+            def __init__(self, parent):
+                self._selection = tk.StringVar(value=list(options.keys())[0])
+                self.result = None
+                super().__init__(parent, title=f"{axis_label}の確率単位")
+
+            def body(self, master):
+                ttk.Label(master, text=f"{axis_label} の入力単位を選択してください").grid(row=0, column=0, padx=12, pady=(12, 6))
+                combo = ttk.Combobox(master, textvariable=self._selection,
+                                      values=list(options.keys()), state="readonly", width=18)
+                combo.grid(row=1, column=0, padx=12, pady=(0, 12))
+                combo.current(0)
+                return combo
+
+            def buttonbox(self):
+                box = ttk.Frame(self)
+                box.pack(side="bottom", fill="x", padx=12, pady=(0, 12))
+                ttk.Button(box, text="OK", command=self.ok).pack(side="left", expand=True, fill="x", padx=(0, 4))
+                ttk.Button(box, text="キャンセル", command=self.cancel).pack(side="left", expand=True, fill="x", padx=(4, 0))
+                self.bind("<Return>", self.ok)
+                self.bind("<Escape>", self.cancel)
+
+            def apply(self):
+                self.result = self._selection.get()
+
+        dialog = _UnitDialog(self)
+        if dialog.result is None:
+            return None
+        return options[dialog.result]
 
     # ---------- 画像ロード ----------
     def _load_image(self, img_path):
@@ -178,11 +235,11 @@ class GraphDigitizer(tk.Tk):
         yt = simpledialog.askfloat("キャリブレーション", prompt + "\ny 値:")
         if xt is None or yt is None:  # キャンセル
             return
-        if self.x_scale_mode == "log" and xt <= 0:
-            messagebox.showerror("エラー", "x軸をlogスケールにした場合、正の値のみ入力してください。")
-            return
-        if self.y_scale_mode == "log" and yt <= 0:
-            messagebox.showerror("エラー", "y軸をlogスケールにした場合、正の値のみ入力してください。")
+        try:
+            self._validate_calibration_value("x", xt)
+            self._validate_calibration_value("y", yt)
+        except ValueError as exc:
+            messagebox.showerror("エラー", str(exc))
             return
         LOGGER.info(
             "キャリブレーション入力: img=(%.2f, %.2f) -> actual=(%.6g, %.6g)",
@@ -203,8 +260,8 @@ class GraphDigitizer(tk.Tk):
         xi, yi, xt, yt = zip(*( (p[0][0], p[0][1], p[1][0], p[1][1])
                                 for p in self.calib_pairs ))
         try:
-            ax, bx = self._fit_axis(xi, xt, self.x_scale_mode)
-            ay, by = self._fit_axis(yi, yt, self.y_scale_mode)
+            ax, bx = self._fit_axis("x", xi, xt)
+            ay, by = self._fit_axis("y", yi, yt)
         except ValueError as exc:
             messagebox.showerror("エラー", str(exc))
             return
@@ -234,8 +291,9 @@ class GraphDigitizer(tk.Tk):
         yi = (sy - self.offset_y) / self.scale
         return xi, yi
 
-    def _fit_axis(self, img_coords, actual_values, scale_mode):
-        if scale_mode not in ("linear", "log"):
+    def _fit_axis(self, axis, img_coords, actual_values):
+        scale_mode = self.x_scale_mode if axis == "x" else self.y_scale_mode
+        if scale_mode not in ("linear", "log", "probability"):
             raise ValueError("スケール設定が不正です。")
         img_arr = np.asarray(img_coords, dtype=float)
         act_arr = np.asarray(actual_values, dtype=float)
@@ -243,6 +301,9 @@ class GraphDigitizer(tk.Tk):
             if np.any(act_arr <= 0):
                 raise ValueError("対数スケールには正の値が必要です。キャリブレーション点を確認してください。")
             target = np.log10(act_arr)
+        elif scale_mode == "probability":
+            probs = self._convert_probability_values(axis, act_arr)
+            target = self._probability_forward_transform(probs)
         else:
             target = act_arr
         slope, intercept = np.polyfit(img_arr, target, 1)
@@ -251,7 +312,12 @@ class GraphDigitizer(tk.Tk):
     def _format_axis_message(self, axis, slope, intercept):
         axis_label = "x" if axis == "x" else "y"
         scale_mode = self.x_scale_mode if axis == "x" else self.y_scale_mode
-        lhs = f"log10({axis_label})" if scale_mode == "log" else axis_label
+        if scale_mode == "log":
+            lhs = f"log10({axis_label})"
+        elif scale_mode == "probability":
+            lhs = f"probit({axis_label}/100)" if self._probability_is_percent[axis] else f"probit({axis_label})"
+        else:
+            lhs = axis_label
         return f"{lhs} = {slope:.4f}*{axis_label}_img + {intercept:.4f}"
 
     def _apply_axis_value(self, axis, coord):
@@ -260,7 +326,38 @@ class GraphDigitizer(tk.Tk):
         value = slope * coord + intercept
         if scale_mode == "log":
             return 10 ** value
+        if scale_mode == "probability":
+            prob = self._probability_inverse_transform(value)
+            if self._probability_is_percent[axis]:
+                return prob * 100.0
+            return prob
         return value
+
+    def _validate_calibration_value(self, axis, value):
+        scale_mode = self.x_scale_mode if axis == "x" else self.y_scale_mode
+        if scale_mode == "log" and value <= 0:
+            raise ValueError(f"{axis}軸をlogスケールにした場合、正の値のみ入力してください。")
+        if scale_mode == "probability":
+            is_percent = self._probability_is_percent[axis]
+            lower, upper = (0, 100) if is_percent else (0, 1)
+            if not (lower < value < upper):
+                unit = "%" if is_percent else "0-1"
+                raise ValueError(f"{axis}軸を確率紙スケールにした場合、{unit}の範囲内 (端点を除く) で入力してください。")
+
+    def _convert_probability_values(self, axis, values):
+        is_percent = self._probability_is_percent[axis]
+        probs = np.asarray(values, dtype=float)
+        if is_percent:
+            probs = probs / 100.0
+        if np.any((probs <= 0) | (probs >= 1)):
+            raise ValueError("確率紙スケールでは0および1(0%および100%)を使用できません。キャリブレーション点を見直してください。")
+        return probs
+
+    def _probability_forward_transform(self, probs):
+        return np.array([NORMAL_DIST.inv_cdf(float(p)) for p in probs], dtype=float)
+
+    def _probability_inverse_transform(self, value):
+        return NORMAL_DIST.cdf(value)
 
     # ---------- CSV 出力 ----------
     def _finish(self):
