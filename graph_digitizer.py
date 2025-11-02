@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-graph_digitizer.py バージョン名: "v12_calib_to_top"
+graph_digitizer.py バージョン名: "v13_how_to_use"
 依存: numpy, pillow (pip install numpy pillow)
 使い方:
     python graph_digitizer.py                 # ダイアログで画像選択
@@ -94,9 +94,16 @@ class GraphDigitizer(tk.Tk):
         self.canvas.bind("<Button-4>", self._on_zoom)
         self.canvas.bind("<Button-5>", self._on_zoom)
 
-        self.finish_btn = ttk.Button(self, text="データ取得を終了",
+        btn_frame = ttk.Frame(self)
+        btn_frame.pack(fill="x")
+
+        self.finish_btn = ttk.Button(btn_frame, text="データ取得を終了",
                                      state="disabled", command=self._finish)
-        self.finish_btn.pack(fill="x")
+        self.finish_btn.pack(side="left", expand=True, fill="x", padx=(0, 4))
+
+        self.help_btn = ttk.Button(btn_frame, text="操作方法",
+                                   command=self._show_help)
+        self.help_btn.pack(side="left", expand=True, fill="x")
 
         self.tree = ttk.Treeview(self, columns=("x","y"), show="headings", height=6)
         self.tree.heading("x", text="x")
@@ -473,6 +480,22 @@ class GraphDigitizer(tk.Tk):
         self.canvas.coords(self.image_id, self.offset_x, self.offset_y)
         # adjust window size
         self.geometry(f"{w}x{h+180}")
+
+    def _show_help(self):
+        help_text = (
+            "【操作手順】\n"
+            "1. キャリブレーションモードでグラフ上の基準点をクリックし、実座標を入力します。\n"
+            "2. 少なくとも 2 点登録後にキャリブレーションを完了するとデータ取得モードへ移行します。\n"
+            "3. データ取得モードではデータを取得したい点をクリックすると座標が追加されます。\n\n"
+            "【マウス操作】\n"
+            "・左クリック: 現在のモードに応じてキャリブレーションまたはデータ取得。\n"
+            "・中ボタンドラッグ: 画像のパン移動。\n"
+            "・ホイール: マウス位置を中心にズーム。\n\n"
+            "【確率紙スケール】\n"
+            "・キャリブレーション入力時は 0 と 1（または 0% と 100%）を避けてください。"
+        )
+        messagebox.showinfo("操作方法", help_text, parent=self)
+        LOGGER.info("操作方法ダイアログを表示しました")
 
 if __name__ == "__main__":
     img_arg = sys.argv[1] if len(sys.argv) > 1 else None
