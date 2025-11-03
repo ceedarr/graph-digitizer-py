@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-graph_digitizer.py バージョン名: "v13_how_to_use"
+graph_digitizer.py
+author: @ceedarr (github.com/ceedarr)
 依存: numpy, pillow (pip install numpy pillow)
 使い方:
     python graph_digitizer.py                 # ダイアログで画像選択
