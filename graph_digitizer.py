@@ -11,7 +11,7 @@ author: @ceedarr (github.com/ceedarr)
 from pathlib import Path
 from datetime import datetime
 from typing import Optional
-import csv, logging, sys, tkinter as tk
+import csv, logging, sys, tkinter as tk, webbrowser
 from tkinter import filedialog, simpledialog, messagebox, ttk
 import numpy as np
 from PIL import Image, ImageTk
@@ -95,16 +95,32 @@ class GraphDigitizer(tk.Tk):
         self.canvas.bind("<Button-4>", self._on_zoom)
         self.canvas.bind("<Button-5>", self._on_zoom)
 
-        btn_frame = ttk.Frame(self)
-        btn_frame.pack(fill="x")
+        btn_container = ttk.Frame(self)
+        btn_container.pack(fill="x")
 
-        self.finish_btn = ttk.Button(btn_frame, text="データ取得を終了",
-                                     state="disabled", command=self._finish)
-        self.finish_btn.pack(side="left", expand=True, fill="x", padx=(0, 4))
+        finish_frame = ttk.Frame(btn_container)
+        finish_frame.pack(fill="x")
 
-        self.help_btn = ttk.Button(btn_frame, text="操作方法",
-                                   command=self._show_help)
-        self.help_btn.pack(side="left", expand=True, fill="x")
+        self.finish_btn = ttk.Button(
+            finish_frame,
+            text="データ取得を終了",
+            state="disabled",
+            command=self._finish,
+        )
+        self.finish_btn.pack(fill="x")
+
+        action_frame = ttk.Frame(btn_container)
+        action_frame.pack(fill="x", pady=(4, 0))
+
+        self.help_btn = ttk.Button(action_frame, text="操作方法", command=self._show_help)
+        self.help_btn.pack(side="left")
+
+        self.support_btn = ttk.Button(
+            action_frame,
+            text="製作者を支援する ☕",
+            command=self._open_sponsor_page,
+        )
+        self.support_btn.pack(side="left", padx=(4, 0))
 
         self.tree = ttk.Treeview(self, columns=("x","y"), show="headings", height=6)
         self.tree.heading("x", text="x")
@@ -497,6 +513,13 @@ class GraphDigitizer(tk.Tk):
         )
         messagebox.showinfo("操作方法", help_text, parent=self)
         LOGGER.info("操作方法ダイアログを表示しました")
+
+    def _open_sponsor_page(self):
+        sponsor_url = "https://github.com/sponsors/ceedarr?source=graph-digitizer&frequency=one-time"
+        if not webbrowser.open(sponsor_url, new=1, autoraise=True):
+            messagebox.showwarning("注意", "ご支援へ関心をお持ちいただきありがとうございます。ブラウザを開けませんでした。お手数ですが、URLを手動で開いてください。", parent=self)
+            return
+        print("ご支援へ関心をお持ちいただきありがとうございます。GitHub Sponcorsページを開きます...")
 
 if __name__ == "__main__":
     img_arg = sys.argv[1] if len(sys.argv) > 1 else None
