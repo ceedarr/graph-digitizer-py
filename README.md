@@ -26,7 +26,11 @@ x、y軸共に線形、log、確率紙スケールに対応しており、これ
 
 ## インストール
 
-使用前に、必要なライブラリをpipでインストールしてください。
+リポジトリ直下の `run_graph_digitizer.bat`（Windows）または `run_graph_digitizer.sh`（Linux/macOS）を実行すると、仮想環境が存在しない場合に自動で作成され、`numpy` と `pillow` が導入されたうえでアプリが起動します。通常はこれらのランチャーだけでセットアップと起動が完結します。なお、作成される仮想環境の容量は、作者環境の Python 3.13.1 環境では約82MBでした。
+
+手動で仮想環境を準備したい場合のみ、`create_env.sh`（Linux/macOS）または `create_env.bat`（Windows）を一度実行すれば、`numpy` と `pillow` が導入済みの環境が `.venv` 配下に作成されます。2回目以降は再実行する必要はありません。
+
+または、自前で仮想環境を構築する場合は、venv作成後、下記コマンドでNumPyとPillowをインストールしてください。
 
 ```bash
 pip install numpy pillow
@@ -36,7 +40,7 @@ pip install numpy pillow
 
 1. **起動**
 
-   コマンドラインから `graph_digitizer.py` を実行します。
+   コマンドラインから `graph_digitizer.py` を実行します。Windows の場合は `run_graph_digitizer.bat` をダブルクリックして起動しても同じ処理が行われます。Linux/macOS では `run_graph_digitizer.sh` を利用できます。
 
    - 画像ファイルを指定せずに起動する場合（ファイル選択ダイアログが開きます）:
      ```bash
